@@ -46,7 +46,6 @@ create database if not exists cis_students_db;
 -- switch into it, so everything below lands in the right place.
 use cis_students_db;
 
-
 -- ==================================================================
 -- FROM LAB 5D. students. student_id is a surrogate key the server fills in.
 -- ==================================================================
@@ -261,7 +260,6 @@ CALL remove_score(4, 'quiz5');
 CALL list_students();
 SELECT * FROM attendance;
 
-
 -- ######################################################################
 -- YOUR LAB 5H WORK STARTS BELOW THIS LINE
 --
@@ -278,17 +276,39 @@ SELECT * FROM attendance;
 -- Copy these from the handout and run them.
 -- =================================================================
 
--- your comment goes here
--- your statements go here
+-- Create and use session variables to store and display values
 
+-- make a session variable and look at it
+SET @passing = 80;
+SELECT @passing;
+
+-- use it in a query, anywhere a value could go
+SELECT student_name, test_name, score
+FROM student_scores
+WHERE score < @passing;
+
+-- a variable nobody ever set
+SELECT @never_set;
+
+-- put the answer to a query straight into a variable
+SELECT COUNT(*) INTO @how_many FROM students;
+SELECT @how_many;
 
 -- =================================================================
 -- STEP 4. Session variables on your own
 -- =================================================================
 
--- your comment goes here
--- your statements go here
+-- find the highest quiz3 score and use variables to display test scores and student reports
+select max(score) into @top from test_scores where test_name = 'quiz3';
+select @top;
 
+-- store quiz3 in a variable and display all quiz3 scores
+set @test = 'quiz3';
+call scores_for_test(@test);
+
+-- store student 3 in a variable and disaplay their report
+set @who = 3;
+call student_report(@who);
 
 -- =================================================================
 -- STEP 5. Local variables, class_stats
@@ -296,9 +316,36 @@ SELECT * FROM attendance;
 -- Copy this one from the handout. Then try the SELECT that fails.
 -- =================================================================
 
--- your comment goes here
--- your statements go here
+-- use local variables to count students, scores, and calculate the class average
 
+-- three numbers about the whole class, worked out one at a time
+CREATE PROCEDURE class_stats()
+BEGIN
+    -- DECLARE makes a local variable: a name, a type, and a starting value
+    DECLARE v_students INT DEFAULT 0;
+    DECLARE v_scores INT DEFAULT 0; 
+    DECLARE v_average DECIMAL(5,2);
+    
+    -- fill the first one
+    SELECT COUNT(*) INTO v_students FROM students;
+
+    -- one SELECT can fill two variables, in the same order
+    SELECT COUNT(*), ROUND(AVG(score), 2)
+    INTO v_scores, v_average
+    FROM test_scores;
+    
+    -- show all three as one row
+    SELECT v_students AS students, v_scores AS scores, v_average AS class_average;
+END
+
+-- CALL procedure class_stats
+CALL class_stats(); 
+-- 5 students, 11 scores, 86.55
+
+-- select local variable v_students
+SELECT v_students;
+-- error message: Unknown column 'v_students' in 'field list'
+-- cannot be used outside the procedure
 
 -- =================================================================
 -- STEP 6. An OUT parameter, count_scores
@@ -306,9 +353,31 @@ SELECT * FROM attendance;
 -- Copy the skeleton and write the SELECT ... INTO.
 -- =================================================================
 
--- your comment goes here
--- your statements go here
+-- use an out parameter to count and return a student's test scores
 
+-- counts one student's scores and hands the number back
+CREATE PROCEDURE count_scores(IN p_student_id INT, OUT p_count INT)
+BEGIN
+    -- count this student's rows and put the answer in p_count
+    SELECT COUNT(*) INTO p_count
+    FROM test_scores
+    WHERE student_id = p_student_id;
+END
+
+-- count the scores for students 3, 5, and 9
+CALL count_scores(3, @n); -- result 3
+SELECT @n;
+
+CALL count_scores(5, @n); -- result 1
+SELECT @n;
+
+CALL count_scores(9, @n); -- result 0
+SELECT @n;
+
+-- create an error and document in a moment
+CALL count_scores(3,5);
+-- Error message: OUT or INOUT argument 2 for routine cis_students_db.count_scores is not a variable or NEW pseudo-variable in BEFORE trigger
+-- the out parameter needs a variable instead of a number
 
 -- =================================================================
 -- STEP 7. When a local variable is too small
@@ -316,9 +385,55 @@ SELECT * FROM attendance;
 -- Most of this step is yours. Put each error number in a comment.
 -- =================================================================
 
--- your comment goes here
--- your statements go here
+-- add a new student and fix data types to allow a gpa of 100
 
+-- add Ana Lopes as a new student
+describe students;
+insert into students(null, "Ana", "Lopez", null);
+select * from students;
+
+-- add a perfect quiz1 score for Ana
+call add_score('quiz1', 7, 100);
+-- Error message: Out of range value for column 'v_gpa' at row 1
+-- v_gpa is too small to store a gpa of 100
+
+select * from test_scores;
+select * from students;
+
+-- remove the old function to fix its data type
+drop function calculate_gpa;
+
+-- recreate the function to allow a gpa of 100
+CREATE FUNCTION calculate_gpa(p_student_id INT)
+RETURNS DECIMAL(5,2)
+DETERMINISTIC
+READS SQL DATA
+BEGIN
+    DECLARE v_gpa DECIMAL(5,2);
+
+    SELECT ROUND(AVG(score), 2)
+    INTO v_gpa
+    FROM test_scores
+    WHERE student_id = p_student_id
+      AND score IS NOT NULL;
+
+    RETURN IFNULL(v_gpa, 0.00);
+END;
+
+-- call UPDATE to update the student's GPA
+update students
+set gpa = calculate_gpa(7)
+where student_id = 7;
+
+-- alter the student table
+alter table students MODIFY gpa decimal(5,2);
+
+-- run the update again to recalculate the goa
+update students
+set gpa = calculate_gpa(7)
+where student_id = 7;
+
+CALL list_students; -- Ana's gpa is 100.00
 
 -- =================================================================
 -- STEP 8. IF, ELSEIF and ELSE, student_standing
