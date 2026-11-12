@@ -441,9 +441,47 @@ CALL list_students; -- Ana's gpa is 100.00
 -- Copy the skeleton and write the IF block.
 -- =================================================================
 
--- your comment goes here
--- your statements go here
+-- use if, elseif, and else to describe a student's gpa
 
+-- reports a student's standing as a word, through an OUT parameter
+CREATE PROCEDURE student_standing(IN p_student_id INT, OUT p_standing VARCHAR(20))
+
+BEGIN
+    -- the gpa goes here once we have looked it up
+    DECLARE v_gpa DECIMAL(5,2);
+    -- look it up. no matching student leaves v_gpa NULL
+    SELECT gpa
+    INTO v_gpa
+    FROM students
+    WHERE student_id = p_student_id;
+
+    -- choose the label
+    if v_gpa IS NULL THEN
+        SET p_standing = "No such student";
+    ELSEIF v_gpa >= 90 THEN
+        SET p_standing = "Honors";
+    ELSEIF v_gpa >= 85 THEN
+        SET p_standing = "Good standing";
+    ELSE
+        SET p_standing = "Needs support";
+    END IF;
+END
+
+-- call for students 7, 3, 1, 4, and 9
+CALL student_standing(7,@s); -- Honors
+select @s;
+
+CALL student_standing(3,@s); -- Honors
+select @s;
+
+CALL student_standing(1,@s); -- Good standing
+select @s;
+
+CALL student_standing(4,@s); -- Needs support
+select @s;
+
+CALL student_standing(9,@s); -- No such student
+select @s;
 
 -- =================================================================
 -- STEP 9. Rebuild add_score so it checks the score
